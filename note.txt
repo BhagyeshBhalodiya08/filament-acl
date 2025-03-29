@@ -1,0 +1,4 @@
+attendances
+loans
+salaries
+advance_salaries

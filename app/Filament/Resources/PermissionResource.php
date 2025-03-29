@@ -18,10 +18,15 @@ use App\Filament\Resources\BaseResource;
 class PermissionResource extends BaseResource
 {
     protected static ?string $model = Permission::class;
+    
+    protected static ?string $navigationGroup = 'Administrator';
 
     // protected static ?string $tenantRelationshipName = 'permissions'; // 🔹 Add this line
     
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    // protected static ?string $navigationIcon = 'heroicon-o-key';
+    protected static ?string $navigationIcon = 'heroicon-o-lock-closed';
+    
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {

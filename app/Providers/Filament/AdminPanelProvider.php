@@ -20,6 +20,7 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Resources\IndustryResource\Pages\RegisterIndustry;
 use App\Filament\Resources\IndustryResource\Pages\EditIndustry;
 use App\Models\Industry;
+use Saade\FilamentFullCalendar\FilamentFullCalendarPlugin;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -42,8 +43,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
             ->widgets([
-                Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
+                // Widgets\AccountWidget::class,
+                // Widgets\FilamentInfoWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,
@@ -59,6 +60,12 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ])
+            ->plugins([
+                FilamentFullCalendarPlugin::make()->schedulerLicenseKey('null')
+                ->selectable()
+                ->editable()
+                ->timezone('UTC')
+            ])
             ->tenant(Industry::class)
             ->tenantRegistration(RegisterIndustry::class)
             // ->tenantProfile(EditIndustry::class)
@@ -67,7 +74,8 @@ class AdminPanelProvider extends PanelProvider
             // ])
             // ->sidebarCollapsibleOnDesktop()
             // ->sidebarFullyCollapsibleOnDesktop()
-            // ->topNavigation()
+            ->topNavigation()
+            // ->theme('resources/css/filament/admin/theme.css')
             ;
     }
 }

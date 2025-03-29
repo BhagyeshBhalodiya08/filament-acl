@@ -27,4 +27,29 @@ class Industry extends Model
     {
         return $this->hasMany(Permission::class, 'industry_id');
     }
+    
+    public function employees()
+    {
+        return $this->hasMany(Employee::class, 'industry_id');
+    }
+
+    public function events()
+    {
+        return $this->hasMany(Event::class, 'industry_id');
+    }
+    
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class, 'industry_id');
+    }
+    
+    public function loans()
+    {
+        return $this->hasMany(Loans::class, 'industry_id');
+    }
+    
+    public function advance_salaries()
+    {
+        return $this->hasMany(AdvanceSalaries::class, 'industry_id');
+    }
 }

@@ -16,14 +16,18 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use App\Models\Industry;
 use Filament\Tables\Columns\TextColumn;
+use App\Filament\Resources\BaseResource;
 
-
-
-class UserResource extends Resource
+// class UserResource extends Resource
+class UserResource extends BaseResource
 {
     protected static ?string $model = User::class;
+    
+    protected static ?string $navigationGroup = 'Administrator';
 
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationIcon = 'heroicon-o-user-circle';
+
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {

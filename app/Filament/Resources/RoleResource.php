@@ -17,10 +17,15 @@ class RoleResource extends Resource
 {
     protected static ?string $model = Role::class;
     
+    protected static ?string $navigationGroup = 'Administrator';
+
     // protected static ?string $tenantOwnershipRelationshipName = 'industry'; // Use 'industry', not 'tenant'
     protected static ?string $tenantOwnershipRelationshipName = 'users';
     
-    protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    // protected static ?string $navigationIcon = 'heroicon-o-identification';
+    protected static ?string $navigationIcon = 'heroicon-o-user-group';
+    
+    protected static ?int $navigationSort = 4;
 
     public static function form(Form $form): Form
     {
