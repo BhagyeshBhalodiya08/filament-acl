@@ -1,0 +1,19 @@
+php artisan make:model Industry -m
+
+
+
+Schema::create('industries', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->timestamps();
+});
+
+Schema::create('industries_user', function (Blueprint $table) {
+    $table->id();
+    $table->unsignedBigInteger('user_id');
+    $table->unsignedBigInteger('industries_id');
+    $table->timestamps();
+});
+
+
+php artisan make:filament-page RegisterTenant
