@@ -30,6 +30,8 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->registration()
+            ->passwordReset()
             ->colors([
                 'primary' => Color::Amber,
             ])
@@ -59,10 +61,13 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->tenant(Industry::class)
             ->tenantRegistration(RegisterIndustry::class)
-            ->tenantProfile(EditIndustry::class)
+            // ->tenantProfile(EditIndustry::class)
             // ->tenantMenuItems([
             //     'register' => MenuItem::make()->label('New company'),
             // ])
+            // ->sidebarCollapsibleOnDesktop()
+            // ->sidebarFullyCollapsibleOnDesktop()
+            // ->topNavigation()
             ;
     }
 }

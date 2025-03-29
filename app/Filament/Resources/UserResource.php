@@ -37,18 +37,20 @@ class UserResource extends Resource
                 ->email()
                 ->required(),
 
-            Select::make('industry_id')
-                ->label('Industries')
-                ->multiple()
-                ->relationship('industry', 'name') // Ensure you have a "industries()" relation in your model
-                ->searchable()
-                ->required(),            
-
             TextInput::make('password')
                 ->password()
                 ->required()
                 ->maxLength(255)
                 ->visible(fn ($record) => !$record),
+            
+            Forms\Components\Select::make('super_user')
+                ->options([
+                    'yes' => 'Yes',
+                    'no' => 'No',
+                ])
+                ->default('no')
+                ->visible(fn () => auth()->user()->super_user === 'yes'),
+
             ]);
     }
 
@@ -58,7 +60,8 @@ class UserResource extends Resource
             ->columns([
                 TextColumn::make("name"),
                 TextColumn::make("email"),
-                TextColumn::make("industry.name")
+                TextColumn::make("industry.name")->badge(),
+                TextColumn::make('super_user')->badge()->visible(fn () => auth()->user()->super_user === 'yes'),
             ])
             ->filters([
                 //

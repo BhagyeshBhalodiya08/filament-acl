@@ -17,7 +17,7 @@ class EditIndustry extends EditTenantProfile
   
     public static function getLabel(): string
     {
-        return 'Edit your company';
+        return 'Edit Your Industry';
     }
 
     public function form(Form $form): Form

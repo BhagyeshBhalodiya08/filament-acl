@@ -49,10 +49,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants, HasDefau
         ];
     }
     //  // Relationship to Industry
-    //  public function industry(): BelongsToMany
-    //  {
-    //      return $this->belongsToMany(Industry::class);
-    //  }
+     public function industry_for_form()
+     {
+         return $this->belongsTo(Industry::class);
+     }
      public function industry(): BelongsToMany
      {
         return $this->belongsToMany(
@@ -61,46 +61,34 @@ class User extends Authenticatable implements FilamentUser, HasTenants, HasDefau
         ->withTimestamps();
      }
      
-    //  // Check if the user is a super user
-    //  public function isSuperUser()
-    //  {
-    //      return $this->is_superuser; // Boolean column in users table
-    //  }
-    //  // Get industry-specific data (Super User sees all)
-    // public function scopeIndustryData($query)
-    // {
-    //     if (auth()->user()->isSuperUser()) {
-    //         return $query; // Super User gets all data
-    //     }
-    //     return $query->where('industry_id', auth()->user()->industry_id); // Regular users get their industry's data
-    // }
-    
-    // public function getTenants(Panel $panel): Collection
-    // {
-    //     return $this->industry;
-    // }
     public function canAccessPanel(Panel $panel): bool
     {
         return true;
     }
 
-    // public function canAccessTenant(Model $tenant): bool
-    // {
-    //     return $this->industry()->whereKey($tenant)->exists();
-    // }
     public function canAccessTenant(Model $tenant): bool
     {
-        return $this->industry->contains($tenant);
+        // return $this->industry->contains($tenant);
+        return $this->isSuperAdmin() || $this->industry->contains($tenant);
     }
 
     public function getTenants(Panel $panel): array|Collection
     {
+
         return $this->industry ?? [];
+        // return User::where('super_user', 'yes')
+        //     ->whereDoesntHave('industry') // Ensure user has no tenant
+        //     ->get();
     }
 
     public function getDefaultTenant(Panel $panel): ?Model
     {
         return $this->industry()->first();
+    }
+    
+    public function isSuperAdmin(): bool
+    {
+        return $this->super_user === 'yes';
     }
 
 }

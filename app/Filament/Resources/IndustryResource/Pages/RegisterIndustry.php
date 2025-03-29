@@ -16,7 +16,7 @@ class RegisterIndustry extends BaseRegisterTenant
 
     public static function getLabel(): string
     {
-        return 'Register your company';
+        return 'Register Your Industry';
     }
 
     public function form(Form $form): Form
@@ -37,7 +37,10 @@ class RegisterIndustry extends BaseRegisterTenant
 
         /** @var User $user */
         $user = auth()->user();
-        $user->industry()->attach($entity->id);
+
+        // if ($user && $user->super_user === 'yes') {
+            $user->industry()->attach($entity->id);
+        // }
 
         return $entity;
     }
