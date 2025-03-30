@@ -17,6 +17,7 @@ use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BadgeColumn;
+use Illuminate\Support\Facades\DB;
 
 class SalaryResource extends Resource
 {
@@ -30,10 +31,18 @@ class SalaryResource extends Resource
     {
         return $form
             ->schema([
-                Section::make('Worker Information')->schema([
-                    Select::make('worker_id')->relationship('worker', 'full_name')->required(),
-                    Forms\Components\DatePicker::make('salary_month')->native(false)->displayFormat('F Y')
-                    ->format('Y-m')->required(),
+                Section::make('Employee Information')->schema([
+                    Select::make('worker_id')
+                        ->relationship('worker', 'full_name')
+                        ->required()
+                        ->label('Employee')
+                        ->live(),
+                    Forms\Components\DatePicker::make('salary_month')
+                        ->native(false)
+                        ->displayFormat('F Y')
+                        ->format('Y-m')
+                        ->required()
+                        ->live(),
                 ]),
                 
                 Section::make('Attendance Details')->schema([
@@ -43,7 +52,34 @@ class SalaryResource extends Resource
                     TextInput::make('total_hours_worked')->numeric()->disabled(),
                     TextInput::make('overtime_hours')->numeric()->disabled(),
                     TextInput::make('half_day_count')->numeric(),
-                ])->columns(2),
+                ])->columns(2)->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
+                    $workerId = $get('worker_id');
+                    $salaryMonth = $get('salary_month');
+                
+                    if ($workerId && $salaryMonth) {
+                        // Fetch attendance data for the selected worker and month
+                        $attendance = DB::table('attendances')
+                            ->where('worker_id', $workerId)
+                            ->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$salaryMonth])
+                            ->selectRaw("
+                                COUNT(*) as total_working_days,
+                                SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as days_present,
+                                SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as days_absent,
+                                SUM(total_hours) as total_hours_worked,
+                                SUM(overtime_hours) as overtime_hours,
+                                SUM(CASE WHEN status = 'half-day' THEN 1 ELSE 0 END) as half_day_count
+                            ")
+                            ->first();
+                
+                        // Set values in form fields
+                        $set('total_working_days', $attendance->total_working_days ?? 0);
+                        $set('days_present', $attendance->days_present ?? 0);
+                        $set('days_absent', $attendance->days_absent ?? 0);
+                        $set('total_hours_worked', $attendance->total_hours_worked ?? 0);
+                        $set('overtime_hours', $attendance->overtime_hours ?? 0);
+                        $set('half_day_count', $attendance->half_day_count ?? 0);
+                    }
+                }),
                 
                 Section::make('Salary Breakdown')->schema([
                     TextInput::make('basic_salary')->numeric()->required()->reactive()

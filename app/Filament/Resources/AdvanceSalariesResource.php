@@ -98,12 +98,9 @@ class AdvanceSalariesResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('id')
-                ->label('ID')
-                ->sortable(),
 
-            TextColumn::make('worker.name')
-                ->label('Worker')
+            TextColumn::make('employee.full_name')
+                ->label('Employee')
                 ->searchable()
                 ->sortable(),
 

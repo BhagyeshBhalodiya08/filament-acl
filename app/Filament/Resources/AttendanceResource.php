@@ -71,11 +71,11 @@ class AttendanceResource extends Resource
                                     'Custom Hours' => 'Custom Hours',
                                 ])
                                 ->required(),
-                            Select::make('working_day_type')
-                                ->options([
-                                    'Half Day' => 'Half Day',
-                                    'Full Day' => 'Full Day',
-                                ])->default("Full Day"),
+                            // Select::make('working_day_type')
+                            //     ->options([
+                            //         'Half Day' => 'Half Day',
+                            //         'Full Day' => 'Full Day',
+                            //     ])->default("Full Day"),
                         ])->columnSpan(1),
                     Section::make('Hours Details')->collapsible()
                         ->description('Provide details about shortfall, extra, and compensated hours.')
@@ -146,13 +146,13 @@ class AttendanceResource extends Resource
                 ])
                 ->sortable(),
 
-            Tables\Columns\TextColumn::make('working_day_type')
-                ->label('Working Day Type')->badge()
-                ->colors([
-                    'warning' => 'Half Day',
-                    'success' => 'Full Day',
-                ])
-                ->sortable(),
+            // Tables\Columns\TextColumn::make('working_day_type')
+            //     ->label('Working Day Type')->badge()
+            //     ->colors([
+            //         'warning' => 'Half Day',
+            //         'success' => 'Full Day',
+            //     ])
+            //     ->sortable(),
 
             Tables\Columns\TextColumn::make('shortfall_hours')
                 ->label('Shortfall Hours')
