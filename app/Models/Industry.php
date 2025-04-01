@@ -9,7 +9,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Industry extends Model
 {
 
-    protected $fillable = ['name'];
+    protected $fillable = [
+        'name',
+        'number',
+        'address'
+    ];
 
     public function users(): BelongsToMany
     {

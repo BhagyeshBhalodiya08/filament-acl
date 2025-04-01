@@ -7,6 +7,7 @@ use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 use App\Models\Industry;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Form;
 use Filament\Pages\Tenancy\RegisterTenant as BaseRegisterTenant;
 
@@ -26,6 +27,12 @@ class RegisterIndustry extends BaseRegisterTenant
                 TextInput::make('name')
                     ->label('Name')
                     ->required()
+                    ->maxLength(255),
+                TextInput::make('number')
+                    ->label('Contact Number')
+                    ->maxLength(25),
+                Textarea::make('address')
+                    ->label('Address')
                     ->maxLength(255),
             ]);
     }

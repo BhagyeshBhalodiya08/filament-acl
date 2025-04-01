@@ -65,7 +65,7 @@ class WorkingDayCalendarWidget extends FullCalendarWidget
             ->map(function (WorkingDay $day) use ($colors) {
                 return [
                     'start' => $day->date,
-                    'title' => $day->type,
+                    'title' => $day->type . (empty($day->remark) ? '' : ' (' . $day->remark . ')'),
                     'remark' => $day->remark,
                     'color' => $colors[$day->type] ?? '#6c757d',
                 ];

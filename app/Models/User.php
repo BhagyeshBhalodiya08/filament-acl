@@ -48,18 +48,22 @@ class User extends Authenticatable implements FilamentUser, HasTenants, HasDefau
             'password' => 'hashed',
         ];
     }
+    
     //  // Relationship to Industry
-     public function industry_for_form()
-     {
-         return $this->belongsTo(Industry::class);
-     }
-     public function industry(): BelongsToMany
-     {
-        return $this->belongsToMany(
-            Industry::class,
-            'industries_user')
-        ->withTimestamps();
-     }
+    public function industry_for_form()
+    {
+        return $this->belongsTo(Industry::class);
+    }
+
+    public function industry(): BelongsToMany
+    {
+    return $this->belongsToMany(
+        Industry::class,
+        'industries_user',
+        'user_id',
+        'industry_id'
+        )->withTimestamps();
+    }
      
     public function canAccessPanel(Panel $panel): bool
     {

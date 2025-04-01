@@ -9,7 +9,6 @@ class Attendance extends Model
     protected $fillable = [
         'employee_id', 
         'attendance_type', 
-        'working_day_type',
         'shortfall_hours',
         'extra_hours',
         'compensated_hours',

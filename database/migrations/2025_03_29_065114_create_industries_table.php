@@ -14,13 +14,15 @@ return new class extends Migration
         Schema::create('industries', function (Blueprint $table) {
             $table->id();
             $table->string('name');
+            $table->string('number', 20)->nullable();
+            $table->string('address')->nullable();
             $table->timestamps();
         });
         
         Schema::create('industries_user', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id');
-            $table->unsignedBigInteger('industries_id');
+            $table->unsignedBigInteger('industry_id');
             $table->timestamps();
         });
     }
