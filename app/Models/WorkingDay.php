@@ -8,18 +8,10 @@ class WorkingDay extends Model
 {
  
     protected $fillable = [
-        'employee_id', 
-        'attendance_type', 
-        'working_day_type',
-        'shortfall_hours',
-        'extra_hours',
-        'compensated_hours',
-        'attendance_date',
+        'date', 
+        'type', 
         'remark',
-        'industry_id',
-        'approved_by',
-        'attendances_start_date',
-        'attendances_end_date'
+        'industry_id'
     ];
 
     public function industry(): \Illuminate\Database\Eloquent\Relations\BelongsTo

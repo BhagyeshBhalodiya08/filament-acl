@@ -79,7 +79,7 @@ class EmployeeResource extends BaseResource
                 TextColumn::make('department')->sortable(),
                 TextColumn::make('designation')->sortable(),
                 TextColumn::make('work_type')->sortable(),
-                TextColumn::make('industry.name')->badge()->sortable(),
+                TextColumn::make('industry.name')->badge()->sortable()->visible(auth()->user()->isSuperAdmin() ?? false),
                 TextColumn::make('created_at')->date(),
             ])
             ->filters([

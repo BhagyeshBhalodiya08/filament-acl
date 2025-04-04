@@ -17,40 +17,36 @@ class WorkingDayCalendarWidget extends FullCalendarWidget
 {
     public Model | string | null $model = WorkingDay::class;
 
-    // protected function headerActions(): array
-    // {
-    //     return [
-    //         Actions\CreateAction::make()->label("Create Attendance")
-    //             ->mutateFormDataUsing(function (array $data): array {
-    //             // Check if event_date_range exists
-    //             if (isset($data['event_date_range'])) {
-    //                 // Extract start and end dates
-    //                 $dates = explode(' - ', $data['event_date_range']);
+    protected ?string $modelLabel = 'ss';
+    
+    protected function viewAction()
+    {
+        return Actions\ViewAction::make();
+    }
 
-    //                 // Convert them to Carbon instances
-    //                 $data['start_time'] = Carbon::createFromFormat('d/m/Y', $dates[0])->startOfDay();
-    //                 $data['end_time'] = Carbon::createFromFormat('d/m/Y', $dates[1])->endOfDay();
+    protected function headerActions(): array
+    {
+        return [
+            Actions\CreateAction::make(),
+        ];
+    }
+    
+    protected function modalActions(): array
+    {
+        return [
+            Actions\EditAction::make()->mountUsing(
+                function (WorkingDay $record, Forms\Form $form, array $arguments) {
+                    $form->fill([
+                        'date' => $record->date,
+                        'type' => $record->type,
+                        'remark' => $record->remark
+                    ]);
+                }
+            ),
+            Actions\DeleteAction::make(),
+        ];
+    }
 
-    //                 // Remove the temporary field
-    //                 unset($data['event_date_range']);
-    //             }
-
-    //             return $data;
-    //         }),
-    //     ];
-    // }
-
-    // protected function modalActions(): array
-    // {
-    //     return [
-    //         Actions\EditAction::make()
-    //             ->label('Edit Attendance')
-    //             ->form($this->getFormSchema()),
-
-    //         Actions\DeleteAction::make()
-    //             ->label('Delete Attendance'),
-    //     ];
-    // }
     public function fetchEvents(array $fetchInfo): array
     {
 
@@ -64,6 +60,7 @@ class WorkingDayCalendarWidget extends FullCalendarWidget
             ->get()
             ->map(function (WorkingDay $day) use ($colors) {
                 return [
+                    'id' => $day->id,
                     'start' => $day->date,
                     'title' => $day->type . (empty($day->remark) ? '' : ' (' . $day->remark . ')'),
                     'remark' => $day->remark,
@@ -75,20 +72,27 @@ class WorkingDayCalendarWidget extends FullCalendarWidget
             return $abcd;
     }
 
-    // public static function getCreateModalHeading(): string
-    // {
-    //     return 'Create Attendance';
-    // }
-    // public function getFormSchema(): array
-    // {
-    //     return [
-    //         Forms\Components\TextInput::make('title') // ✅ Change 'name' to 'title' (matches DB)
-    //             ->required(),
-    //         DateRangePicker::make('event_date_range')
-    //         ->label('Attendance Date Range')
-    //         // ->startDate(fn ($record) => optional($record->start_time)->format('Y-m-d H:i:s'))
-    //         ->required(),
-    //     ];
-    // }
+    public function getFormSchema(): array
+    {
+        return [
+            Forms\Components\DatePicker::make('date')
+                ->required()->native(false)
+                ->label('Select Date') 
+                ->default(now()),
+            Forms\Components\Radio::make('type')
+                ->options([
+                    'Working Day' => 'Working Day',
+                    'Holiday' => 'Holiday',
+                    'Weekend' => 'Weekend',
+                ])
+                ->default('Working Day')
+                ->required()
+                ->inline()
+                ->label('Attendance Type'),
+            Forms\Components\Textarea::make('remark')
+                ->label('Remark')
+                ->inlineLabel(true),
+        ];
+    }
 }
     

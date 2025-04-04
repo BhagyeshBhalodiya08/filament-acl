@@ -24,7 +24,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants, HasDefau
      *
      * @var list<string>
      */
-    protected $fillable = ['name', 'email', 'password', 'industry_id', 'is_superuser'];
+    protected $fillable = ['name', 'email', 'password', 'industry_id', 'super_user'];
 
     /**
      * The attributes that should be hidden for serialization.

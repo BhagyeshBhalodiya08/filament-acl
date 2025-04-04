@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('working_days', function (Blueprint $table) {
             $table->id();
-            $table->date('date')->unique(); // Unique date entry
+            $table->date('date');
             $table->enum('type', ['Working Day', 'Holiday', 'Weekend'])->default('Working Day');
             $table->string('remark')->nullable();
             $table->timestamps();

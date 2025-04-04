@@ -26,7 +26,7 @@ return new class extends Migration
         });
         Schema::create('salaries', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('worker_id')->constrained('employees')->onDelete('cascade');
+            $table->foreignId('employee_id')->constrained('employees')->onDelete('cascade');
             $table->date('salary_month');
             $table->integer('total_working_days');
             $table->integer('days_present');

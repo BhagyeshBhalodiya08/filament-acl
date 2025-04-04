@@ -19,7 +19,6 @@ return new class extends Migration
             $table->enum('attendance_type', ['Half Day', 'Full Day', 'Absent', 'Custom Hours'])->default('Full Day');
             $table->decimal('shortfall_hours', 5, 2)->nullable(); // Shortfall hours, if any
             $table->decimal('extra_hours', 5, 2)->nullable(); // Extra hours worked
-            $table->decimal('compensated_hours', 5, 2)->nullable(); // Compensated hours
             $table->text('remark')->nullable(); // Any remarks regarding attendance
             $table->foreignId('industry_id')->nullable()->constrained()->onDelete('set null'); // Foreign key to industries table
             $table->foreignId('approved_by')->nullable()->constrained('users')->onDelete('set null'); // Foreign key to users table for approver

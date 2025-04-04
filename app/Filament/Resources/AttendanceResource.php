@@ -88,10 +88,6 @@ class AttendanceResource extends Resource
                                 ->numeric()
                                 ->step(0.01)
                                 ->nullable(),
-                            TextInput::make('compensated_hours')
-                                ->numeric()
-                                ->step(0.01)
-                                ->nullable(),
                         ])->columnSpan(1),
                     Section::make('Additional Information')->collapsible()
                         ->description('Add remarks and specify the approver.')
@@ -160,10 +156,6 @@ class AttendanceResource extends Resource
 
             Tables\Columns\TextColumn::make('extra_hours')
                 ->label('Extra Hours')
-                ->sortable(),
-
-            Tables\Columns\TextColumn::make('compensated_hours')
-                ->label('Compensated Hours')
                 ->sortable(),
 
             Tables\Columns\TextColumn::make('remark')

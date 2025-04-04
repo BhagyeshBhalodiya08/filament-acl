@@ -18,6 +18,7 @@ use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\BadgeColumn;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class SalaryResource extends Resource
 {
@@ -32,9 +33,11 @@ class SalaryResource extends Resource
         return $form
             ->schema([
                 Section::make('Employee Information')->schema([
-                    Select::make('worker_id')
+                    Select::make('employee_id')
                         ->relationship('worker', 'full_name')
                         ->required()
+                        ->searchable()
+                        ->preload()
                         ->label('Employee')
                         ->live(),
                     Forms\Components\DatePicker::make('salary_month')
@@ -42,44 +45,45 @@ class SalaryResource extends Resource
                         ->displayFormat('F Y')
                         ->format('Y-m')
                         ->required()
-                        ->live(),
+                        ->live()
+                        ->afterStateUpdated(fn ($state, callable $set, $get) => $set('total_working_days', function () use ($state, $set, $get) {
+
+                            $employeeId = $get('employee_id');
+
+                            $attendanceDetails = self::calculateAttendanceDetails($state, $employeeId);
+
+                            if (!$attendanceDetails) return null;
+                        
+                            // Set the calculated fields
+                            $set('days_present', $attendanceDetails['daysPresent']);
+                            $set('days_absent', $attendanceDetails['daysAbsent']);
+                            $set('total_hours_worked', $attendanceDetails['totalHoursWorked']);
+                            $set('overtime_hours', $attendanceDetails['overtimeHours']);
+                        
+                            return $attendanceDetails['workingDays'];
+                        })),
                 ]),
                 
                 Section::make('Attendance Details')->schema([
-                    TextInput::make('total_working_days')->numeric()->required(),
-                    TextInput::make('days_present')->numeric()->required(),
-                    TextInput::make('days_absent')->numeric()->required(),
-                    TextInput::make('total_hours_worked')->numeric()->disabled(),
-                    TextInput::make('overtime_hours')->numeric()->disabled(),
-                    TextInput::make('half_day_count')->numeric(),
-                ])->columns(2)->afterStateUpdated(function (Forms\Get $get, Forms\Set $set) {
-                    $workerId = $get('worker_id');
-                    $salaryMonth = $get('salary_month');
-                
-                    if ($workerId && $salaryMonth) {
-                        // Fetch attendance data for the selected worker and month
-                        $attendance = DB::table('attendances')
-                            ->where('worker_id', $workerId)
-                            ->whereRaw("DATE_FORMAT(attendance_date, '%Y-%m') = ?", [$salaryMonth])
-                            ->selectRaw("
-                                COUNT(*) as total_working_days,
-                                SUM(CASE WHEN status = 'present' THEN 1 ELSE 0 END) as days_present,
-                                SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as days_absent,
-                                SUM(total_hours) as total_hours_worked,
-                                SUM(overtime_hours) as overtime_hours,
-                                SUM(CASE WHEN status = 'half-day' THEN 1 ELSE 0 END) as half_day_count
-                            ")
-                            ->first();
-                
-                        // Set values in form fields
-                        $set('total_working_days', $attendance->total_working_days ?? 0);
-                        $set('days_present', $attendance->days_present ?? 0);
-                        $set('days_absent', $attendance->days_absent ?? 0);
-                        $set('total_hours_worked', $attendance->total_hours_worked ?? 0);
-                        $set('overtime_hours', $attendance->overtime_hours ?? 0);
-                        $set('half_day_count', $attendance->half_day_count ?? 0);
-                    }
-                }),
+                    TextInput::make('total_working_days')
+                        ->numeric()
+                        ->required()
+                        ->reactive(),
+                    TextInput::make('days_present')
+                        ->numeric()
+                        ->reactive()
+                        ->required(),
+                    TextInput::make('days_absent')
+                        ->numeric()
+                        ->reactive()
+                        ->required(),
+                    TextInput::make('overtime_hours')
+                        ->numeric()
+                        ->disabled(),
+                    TextInput::make('total_hours_worked')
+                        ->numeric()
+                        ->disabled()
+                ]),
                 
                 Section::make('Salary Breakdown')->schema([
                     TextInput::make('basic_salary')->numeric()->required()->reactive()
@@ -263,4 +267,121 @@ class SalaryResource extends Resource
             'edit' => Pages\EditSalary::route('/{record}/edit'),
         ];
     }
+    public static function calculateAttendanceDetails($state, $employeeId)
+    {
+        if (!$state) return null; // Ensure salary_month is set
+    
+        // Get the start and end dates for the selected salary month
+        $startDate = Carbon::parse("$state-01")->startOfMonth()->toDateString();
+        $endDate = Carbon::parse("$state-01")->endOfMonth()->toDateString();
+    
+        // 1. Count Working Days (from 'working_days' table)
+        $workingDays = DB::table('working_days')
+            ->where('type', 'Working Day')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->count();
+    
+        // 2. Get Attendance Counts for present (Full Day, Half Day, Custom Hours) and absent
+        $attendanceCounts = DB::table('attendances')
+            ->select(
+                DB::raw("COUNT(CASE WHEN attendance_type IN ('Full Day', 'Half Day', 'Custom Hours') THEN 1 END) as days_present"),
+                DB::raw("COUNT(CASE WHEN attendance_type = 'Absent' THEN 1 END) as days_absent")
+            )
+            ->where('employee_id', $employeeId) // Filter by employee_id
+            ->whereBetween('attendances_start_date', [$startDate, $endDate])
+            ->whereBetween('attendances_end_date', [$startDate, $endDate])
+            ->first();
+    
+        // Get the values from the result
+        $daysPresent = $attendanceCounts->days_present;
+        $daysAbsent = $attendanceCounts->days_absent;
+    
+        // 3. Calculate Days Absent
+        // Calculate absent days as working days minus the present days
+        $daysAbsent = $workingDays - $daysPresent;
+    
+        // 4. Calculate Total Hours Worked and Overtime Hours
+        $totalHoursWorked = 0;
+        $overtimeHours = 0;
+
+        // Retrieve all attendances to calculate total worked hours and overtime
+        $attendances = DB::table('attendances')
+            ->where('employee_id', $employeeId) // Filter by employee_id
+            ->whereBetween('attendances_start_date', [$startDate, $endDate])
+            ->whereBetween('attendances_end_date', [$startDate, $endDate])
+            ->get();
+
+        foreach ($attendances as $attendance) {
+            $workedHours = 0;
+            $baseHours = 0;
+
+            // Get shortfall and extra hours
+            $shortfall = $attendance->shortfall_hours ?? 0;
+            $extra = $attendance->extra_hours ?? 0;
+
+            // Initialize overtime for this day as extra hours
+            $tempOvertime = $extra;
+            $remainingShortfall = $shortfall;
+
+            // Step 1: Subtract shortfall from overtime hours first
+            if ($remainingShortfall > 0 && $tempOvertime > 0) {
+                $deductFromOvertime = min($remainingShortfall, $tempOvertime);
+                $tempOvertime -= $deductFromOvertime;
+                $remainingShortfall -= $deductFromOvertime;
+            }
+
+            if ($attendance->attendance_type == 'Full Day') {
+                // Full Day: 8 hours base
+                $baseHours = 8;
+                // Step 2: Subtract remaining shortfall from base hours
+                $workedHours = $baseHours - $remainingShortfall;
+                $workedHours = max(0, $workedHours); // Ensure worked hours is not negative
+                // Step 3: Add remaining overtime to worked hours
+                $workedHours += $tempOvertime;
+                // Add to total overtime
+                $overtimeHours += $tempOvertime;
+
+            } elseif ($attendance->attendance_type == 'Half Day') {
+                // Half Day: 4 hours base
+                $baseHours = 4;
+                // Step 2: Subtract remaining shortfall from base hours
+                $workedHours = $baseHours - $remainingShortfall;
+                $workedHours = max(0, $workedHours);
+                // Step 3: Add remaining overtime to worked hours
+                $workedHours += $tempOvertime;
+                // Add to total overtime
+                $overtimeHours += $tempOvertime;
+
+            } elseif ($attendance->attendance_type == 'Custom Hours') {
+                // Custom Hours: Assume 8 hours base unless specified
+                $baseHours = ($attendance->worked_hours ?? 8);
+                // Step 2: Subtract remaining shortfall from base hours
+                $workedHours = $baseHours - $remainingShortfall;
+                $workedHours = max(0, $workedHours);
+                // Step 3: Add remaining overtime to worked hours
+                $workedHours += $tempOvertime;
+                // Add to total overtime
+                $overtimeHours += $tempOvertime;
+                // If total worked hours exceed 8, adjust overtime
+                if ($workedHours > 8) {
+                    $overtimeHours += $workedHours - 8;
+                    $workedHours = 8; // Cap regular hours at 8
+                }
+
+            } elseif ($attendance->attendance_type == 'Absent') {
+                // Absent: No hours worked
+                $workedHours = 0;
+            }
+            // Add to total hours worked
+            $totalHoursWorked += $workedHours;
+        }
+    
+        return [
+            'workingDays' => $workingDays,
+            'daysPresent' => $daysPresent,
+            'daysAbsent' => $daysAbsent,
+            'totalHoursWorked' => $totalHoursWorked,
+            'overtimeHours' => $overtimeHours,
+        ];
+    } 
 }
