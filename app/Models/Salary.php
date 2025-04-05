@@ -20,10 +20,11 @@ class Salary extends Model
     ];
 
     public function worker() {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class,'employee_id');
     }
 
     public function approver() {
         return $this->belongsTo(User::class, 'approved_by');
     }
+    
 }

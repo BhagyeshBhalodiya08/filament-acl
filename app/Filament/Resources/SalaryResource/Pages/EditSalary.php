@@ -16,4 +16,13 @@ class EditSalary extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        if (strlen($data['salary_month']) == 7) {
+            $data['salary_month'] .= '-01';
+        }
+
+        return $data;
+    }
 }

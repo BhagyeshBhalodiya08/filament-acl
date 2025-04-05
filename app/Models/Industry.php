@@ -61,4 +61,9 @@ class Industry extends Model
     {
         return $this->hasMany(WorkingDay::class, 'industry_id');
     }
+
+    public function salaries()
+    {
+        return $this->hasMany(Salary::class, 'industry_id');
+    }
 }

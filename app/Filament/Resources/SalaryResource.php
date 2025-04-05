@@ -13,6 +13,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Tables\Columns\TextColumn;
@@ -39,77 +40,110 @@ class SalaryResource extends Resource
                         ->searchable()
                         ->preload()
                         ->label('Employee')
-                        ->live(),
+                        ->live()
+                        ->afterStateUpdated(function ($state, callable $set) {
+                            $set('total_working_days', null);
+                            $set('days_present', null);
+                            $set('days_absent', null);
+                            $set('total_hours_worked', null);
+                            $set('overtime_hours', null);
+                            $set('basic_salary', null);
+                            $set('gross_salary', null);
+                            $set('total_payable', null);
+                        }),
                     Forms\Components\DatePicker::make('salary_month')
                         ->native(false)
                         ->displayFormat('F Y')
                         ->format('Y-m')
+                        // ->type('month')
                         ->required()
                         ->live()
-                        ->afterStateUpdated(fn ($state, callable $set, $get) => $set('total_working_days', function () use ($state, $set, $get) {
-
-                            $employeeId = $get('employee_id');
-
-                            $attendanceDetails = self::calculateAttendanceDetails($state, $employeeId);
-
-                            if (!$attendanceDetails) return null;
-                        
-                            // Set the calculated fields
-                            $set('days_present', $attendanceDetails['daysPresent']);
-                            $set('days_absent', $attendanceDetails['daysAbsent']);
-                            $set('total_hours_worked', $attendanceDetails['totalHoursWorked']);
-                            $set('overtime_hours', $attendanceDetails['overtimeHours']);
-                        
-                            return $attendanceDetails['workingDays'];
-                        })),
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            try {
+                                self::calculateSalaryDetails($state, $get, $set);
+                            } catch (\Exception $e) {
+                                $set('error_message', 'Error calculating salary: ' . $e->getMessage());
+                            }
+                        }),
                 ]),
                 
                 Section::make('Attendance Details')->schema([
                     TextInput::make('total_working_days')
                         ->numeric()
                         ->required()
-                        ->reactive(),
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::recalculateSalary($get, $set);
+                        }),
                     TextInput::make('days_present')
                         ->numeric()
                         ->reactive()
-                        ->required(),
+                        ->required()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::recalculateSalary($get, $set);
+                        }),
                     TextInput::make('days_absent')
                         ->numeric()
                         ->reactive()
-                        ->required(),
+                        ->required()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::recalculateSalary($get, $set);
+                        }),
                     TextInput::make('overtime_hours')
                         ->numeric()
-                        ->disabled(),
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                        self::recalculateSalary($get, $set);
+                    }),
                     TextInput::make('total_hours_worked')
                         ->numeric()
-                        ->disabled()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                        self::recalculateSalary($get, $set);
+                    })
                 ]),
                 
                 Section::make('Salary Breakdown')->schema([
-                    TextInput::make('basic_salary')->numeric()->required()->reactive()
-                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
-                        $set('gross_salary', ($get('basic_salary') / $get('total_working_days')) * $get('days_present') + $get('other_allowances') + $get('food_allowance'))
-                    ),
-                    TextInput::make('other_allowances')->numeric(),
-                    TextInput::make('food_allowance')->numeric(),
+                    TextInput::make('salary_per_day')->numeric()->required()->reactive(),
+                    TextInput::make('basic_salary')->numeric()
+                        ->required()
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::recalculateSalary($get, $set);
+                        }),
+                    TextInput::make('other_allowances')->numeric()
+                    ->reactive()
+                    ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                        self::updateGrossAndPayable($get, $set);
+                    }),
+                    TextInput::make('food_allowance')->numeric()
+                    ->reactive()
+                    ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                        self::updateGrossAndPayable($get, $set);
+                    }),
                 ])->columns(2),
                 
                 Section::make('Deductions')->schema([
-                    TextInput::make('loan_installment')->numeric(),
-                    TextInput::make('pf_amount')->numeric(),
-                    TextInput::make('advance_salary')->numeric(),
+                    TextInput::make('loan_installment')->numeric()
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::updateGrossAndPayable($get, $set);
+                            $set('due_loan', max(0, (int)($get('due_loan') ?? 0) - (int)($state ?? 0)));
+                        }),
+                    TextInput::make('pf_amount')->numeric()
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::updateGrossAndPayable($get, $set);
+                        }),
+                    TextInput::make('advance_salary')->numeric()
+                        ->reactive()
+                        ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                            self::updateGrossAndPayable($get, $set);
+                        }),
                 ])->columns(2),
                 
                 Section::make('Final Salary Calculation')->schema([
-                    TextInput::make('gross_salary')->numeric()->required(),
-                    TextInput::make('due_loan')->numeric()->reactive()
-                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
-                        $set('due_loan', max(0, (int) ($get('due_loan') ?? 0) - (int) ($get('loan_installment') ?? 0)))
-                    ),
-                    TextInput::make('total_payable')->numeric()->required()->reactive()
-                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => 
-                        $set('total_payable', $get('gross_salary') - ($get('loan_installment') + $get('pf_amount') + $get('advance_salary')))
-                    ),
+                    TextInput::make('gross_salary')->numeric()->required()->reactive(),
+                    TextInput::make('due_loan')->numeric()->reactive(),
+                    TextInput::make('total_payable')->numeric()->required()->reactive(),
                 ])->columns(2),
                 
                 Section::make('Payment & Approval')->schema([
@@ -117,14 +151,14 @@ class SalaryResource extends Resource
                         'Bank Transfer' => 'Bank Transfer',
                         'UPI' => 'UPI',
                         'Cash' => 'Cash'
-                    ])->required(),
+                    ])->required()->searchable()->preload(),
                     Select::make('salary_status')->options([
                         'Pending' => 'Pending',
                         'Paid' => 'Paid',
                         'Hold' => 'Hold'
-                    ])->required(),
-                    TextInput::make('remark'),
-                    Select::make('approved_by')->relationship('approver', 'name')->nullable(),
+                    ])->required()->searchable()->preload(),
+                    Select::make('approved_by')->relationship('approver', 'name')->nullable()->searchable()->preload(),
+                    Textarea::make('remark')->columnSpanFull(),
                 ])->columns(2),
             ]);
     }
@@ -216,8 +250,9 @@ class SalaryResource extends Resource
                 // ])
                 ->sortable(),
 
-            BadgeColumn::make('salary_status')
+            TextColumn::make('salary_status')
                 ->label('Salary Status')
+                ->badge()
                 ->colors([
                     'Pending' => 'warning',
                     'Paid' => 'success',
@@ -257,6 +292,10 @@ class SalaryResource extends Resource
         return [
             //
         ];
+    }
+    public static function getEmployeeSalary($employeeId)
+    {
+        return ;
     }
 
     public static function getPages(): array
@@ -383,5 +422,118 @@ class SalaryResource extends Resource
             'totalHoursWorked' => $totalHoursWorked,
             'overtimeHours' => $overtimeHours,
         ];
-    } 
+    }
+
+    /**
+     * Calculate initial salary details
+     */
+    private static function calculateSalaryDetails($salaryMonth, callable $get, callable $set): void
+    {
+        $employeeId = $get('employee_id');
+        
+        if (!$salaryMonth || !$employeeId) {
+            return;
+        }
+
+        $attendanceDetails = self::calculateAttendanceDetails($salaryMonth, $employeeId);
+        
+        if (!$attendanceDetails) {
+            throw new \Exception('Unable to calculate attendance details');
+        }
+
+        $employee = \App\Models\Employee::select('salary_per_day', 'regular_expense', 'food_expense')
+            ->where('id', $employeeId)
+            ->first();
+
+        if (!$employee) {
+            throw new \Exception('Employee not found');
+        }
+
+        $set('total_working_days', $attendanceDetails['workingDays']);
+        $set('days_present', $attendanceDetails['daysPresent']);
+        $set('days_absent', $attendanceDetails['daysAbsent']);
+        $set('total_hours_worked', $attendanceDetails['totalHoursWorked']);
+        $set('overtime_hours', $attendanceDetails['overtimeHours']);
+        $set('salary_per_day', $employee->salary_per_day);
+        
+        self::recalculateSalary($get, $set);
+    }
+
+    /**
+     * Recalculate salary based on editable fields
+     */
+    private static function recalculateSalary(callable $get, callable $set): void
+    {
+        try {
+            $totalHoursWorked = (float)($get('total_hours_worked') ?? 0);
+            $salaryPerDay = (float)($get('salary_per_day') ?? 0);
+            $daysPresent = (float)($get('days_present') ?? 0);
+            
+            $employee = \App\Models\Employee::select('regular_expense', 'food_expense')
+                ->where('id', $get('employee_id'))
+                ->first();
+
+            $basicSalary = $salaryPerDay > 0 && $totalHoursWorked > 0 
+                ? round(($totalHoursWorked / 8) * $salaryPerDay, 2)
+                : 0;
+                
+            $otherAllowances = $employee && $daysPresent > 0 
+                ? round($employee->regular_expense * $daysPresent, 2)
+                : (float)($get('other_allowances') ?? 0);
+                
+            $foodAllowance = $employee && $daysPresent > 0 
+                ? round($employee->food_expense * $daysPresent, 2)
+                : (float)($get('food_allowance') ?? 0);
+
+            $set('basic_salary', $basicSalary);
+            $set('other_allowances', $otherAllowances);
+            $set('food_allowance', $foodAllowance);
+
+            self::updateGrossAndPayable($get, $set);
+        } catch (\Exception $e) {
+            $set('error_message', 'Calculation error: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Update gross salary and total payable
+     */
+    private static function updateGrossAndPayable(callable $get, callable $set): void
+    {
+        try {
+            $basicSalary = (float)($get('basic_salary') ?? 0);
+            $otherAllowances = (float)($get('other_allowances') ?? 0);
+            $foodAllowance = (float)($get('food_allowance') ?? 0);
+            
+            $grossSalary = round($basicSalary + $otherAllowances + $foodAllowance, 2);
+            $set('gross_salary', $grossSalary);
+
+            $loanInstallment = (float)($get('loan_installment') ?? 0);
+            $pfAmount = (float)($get('pf_amount') ?? 0);
+            $advanceSalary = (float)($get('advance_salary') ?? 0);
+            
+            $totalDeductions = $loanInstallment + $pfAmount + $advanceSalary;
+            $totalPayable = round(max(0, $grossSalary - $totalDeductions), 2);
+            
+            $set('total_payable', $totalPayable);
+        } catch (\Exception $e) {
+            $set('error_message', 'Error updating totals: ' . $e->getMessage());
+        }
+    }
+
+    // /**
+    //  * Calculate attendance details (placeholder)
+    //  */
+    // private static function calculateAttendanceDetails($salaryMonth, $employeeId): ?array
+    // {
+    //     // Implement your actual attendance calculation logic here
+    //     return [
+    //         'workingDays' => 30,
+    //         'daysPresent' => 25,
+    //         'daysAbsent' => 5,
+    //         'totalHoursWorked' => 200,
+    //         'overtimeHours' => 10,
+    //     ];
+    // }
+    
 }
