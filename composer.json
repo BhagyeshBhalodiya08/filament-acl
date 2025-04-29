@@ -13,6 +13,7 @@
         "malzariey/filament-daterangepicker-filter": "^3.2",
         "saade/filament-fullcalendar": "^3.2",
         "spatie/eloquent-sortable": "^4.4",
+        "spatie/laravel-backup": "^9.2",
         "spatie/laravel-permission": "^6.16",
         "ysfkaya/filament-phone-input": "^3.1"
     },
@@ -77,9 +78,5 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "repositories": {
-        "filament-themes": {
-            "type": "composer",
-            "url": "https://filamentthemes.com/composer"
-        }
     }
 }

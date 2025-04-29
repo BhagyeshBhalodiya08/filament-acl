@@ -3,21 +3,17 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\LoansResource\Pages;
-use App\Filament\Resources\LoansResource\RelationManagers;
+use App\Models\Employee;
+use App\Models\Loan;
 use App\Models\Loans;
 use App\Models\User;
-use App\Models\Employee;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Filament\Forms\Components\{Section, Select, DatePicker, TextInput, Textarea};
-use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Columns\BadgeColumn;
-use Filament\Tables\Columns\IconColumn;
+use Carbon\Carbon;
 
 class LoansResource extends Resource
 {
@@ -34,80 +30,106 @@ class LoansResource extends Resource
                 Forms\Components\Grid::make(2) // Creates a grid with two equal-width columns
                 ->schema([
                     // Section 1: Applicant Information
-                    Section::make('Applicant Information')->collapsible()
+                    Forms\Components\Section::make('Applicant Information')->collapsible()
                         ->schema([
-                            Select::make('employee_id')
+                            Forms\Components\Select::make('employee_id')
                                 ->label('Employee')
                                 ->options(Employee::pluck('full_name', 'id'))
                                 ->searchable()
                                 ->required(),
-                            DatePicker::make('application_date')
+                            Forms\Components\DatePicker::make('application_date')
                                 ->label('Application Date')
-                                ->default(now()),
+                                ->default(Carbon::today())
+                                ->required(),
                         ])->columnSpan(2),
 
                     // Section 2: Loan Details
-                    Section::make('Loan Details')->collapsible()
+                    Forms\Components\Section::make('Loan Details')->collapsible()
                         ->schema([
-                            TextInput::make('loan_amount')
+                            Forms\Components\TextInput::make('loan_amount')
                                 ->label('Loan Amount (₹)')
                                 ->numeric()
                                 ->required()
+                                ->minValue(1)
                                 ->live(debounce: 700)
                                 ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get) {
-                                    self::calculateTotalInstallments($set, $get);
+                                    self::calculateInstallmentDetails($set, $get);
                                 }),
-                            DatePicker::make('loan_start_date')
+                            Forms\Components\DatePicker::make('loan_start_date')
                                 ->label('Loan Start Date')
-                                ->default(now())
-                                ->required(),
-                            DatePicker::make('loan_end_date')
-                                ->label('Loan End Date'),
-                            TextInput::make('installment_amount_per_month')
+                                ->default(Carbon::today()->addMonth()->startOfMonth())
+                                ->required()
+                                ->afterOrEqual('application_date'),
+                            Forms\Components\DatePicker::make('loan_end_date')
+                                ->label('Loan End Date')
+                                ->disabled() // Auto-calculated, not editable
+                                ->hint('Calculated based on total installments'),
+                            Forms\Components\TextInput::make('installment_amount_per_month')
                                 ->label('Installment Amount per Month (₹)')
                                 ->numeric()
-                                ->required()
                                 ->live(debounce: 700)
                                 ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get) {
-                                    self::calculateTotalInstallments($set, $get);
+                                    self::calculateInstallmentDetails($set, $get);
                                 }),
-                            TextInput::make('total_installments')
+                            Forms\Components\TextInput::make('total_installments')
                                 ->label('Total Installments')
                                 ->numeric()
-                                ->required(),
+                                ->minValue(1)
+                                ->live(debounce: 700)
+                                ->afterStateUpdated(function (Forms\Set $set, Forms\Get $get) {
+                                    self::calculateInstallmentDetails($set, $get);
+                                }),
                         ])->columnSpan(1),
 
                     // Section 3: Additional Information
-                    Section::make('Additional Information')->collapsible()
+                    Forms\Components\Section::make('Additional Information')->collapsible()
+                        ->schema([
+                            Forms\Components\Select::make('loan_status')
+                                ->label('Loan Status')
+                                ->options([
+                                    'Pending' => 'Pending',
+                                    'Approved' => 'Approved',
+                                    'Rejected' => 'Rejected',
+                                    'Completed' => 'Completed',
+                                ])
+                                ->default('Pending')
+                                ->required(),
+                            Forms\Components\Textarea::make('loan_purpose')
+                                ->label('Loan Purpose')
+                                ->rows(2)
+                                ->maxLength(255),
+                            Forms\Components\Select::make('disbursement_method')
+                                ->label('Disbursement Method')
+                                ->options([
+                                    'Bank Transfer' => 'Bank Transfer',
+                                    'UPI' => 'UPI',
+                                    'Cash' => 'Cash',
+                                ])
+                                ->required(),
+                            Forms\Components\Select::make('loan_approved_by')
+                                ->label('Loan Approved By')
+                                ->options(User::pluck('name', 'id'))
+                                ->searchable()
+                                ->nullable(), // Not required until approved
+                            Forms\Components\Textarea::make('remark')
+                                ->label('Remark')
+                                ->rows(3),
+                        ])->columnSpan(1),
+                Forms\Components\Section::make('Repayment History')
                     ->schema([
-                        Select::make('loan_status')
-                            ->label('Loan Status')
-                            ->options([
-                                'Pending' => 'Pending',
-                                'Approved' => 'Approved',
-                                'Rejected' => 'Rejected',
-                                'Completed' => 'Completed',
+                        Forms\Components\Repeater::make('repayments')
+                            ->relationship()
+                            ->disabled()
+                            ->schema([
+                                Forms\Components\TextInput::make('salary_month')->label('Month'),
+                                Forms\Components\TextInput::make('amount')->label('Amount'),
+                                Forms\Components\DatePicker::make('paid_at')->label('Paid On'),
                             ])
-                            ->required(),
-                        Textarea::make('loan_purpose')
-                            ->label('Loan Purpose')
-                            ->rows(2),
-                        Select::make('disbursement_method')
-                            ->label('Disbursement Method')
-                            ->options([
-                                'Bank Transfer' => 'Bank Transfer',
-                                'UPI' => 'UPI',
-                                'Cash' => 'Cash',
-                            ])
-                            ->required(),
-                        Select::make('loan_approved_by')
-                            ->label('Loan Approved By')
-                            ->options(User::pluck('name', 'id'))
-                            ->required(),
-                        Textarea::make('remark')
-                            ->label('Remark')
-                            ->rows(3),
-                    ])->columnSpan(1),
+                            ->columns(3),
+                    ])
+                    ->visible(fn (?Loans $record) => $record !== null)
+                    ->collapsible(),
+
                 ])
             ]);
     }
@@ -116,63 +138,87 @@ class LoansResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('employee.full_name')
-                    ->label('Employee ID')
-                    ->sortable(),
-                TextColumn::make('application_date')
+                Tables\Columns\TextColumn::make('employee.full_name')
+                    ->label('Employee')
+                    ->sortable()
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('application_date')
                     ->label('Application Date')
                     ->date()
                     ->sortable(),
-                TextColumn::make('loan_amount')
+                Tables\Columns\TextColumn::make('loan_amount')
                     ->label('Loan Amount')
                     ->money('INR')
                     ->sortable(),
-                TextColumn::make('loan_start_date')
+                Tables\Columns\TextColumn::make('loan_start_date')
                     ->label('Start Date')
                     ->date()
                     ->sortable(),
-                TextColumn::make('loan_end_date')
+                Tables\Columns\TextColumn::make('loan_end_date')
                     ->label('End Date')
                     ->date()
                     ->sortable(),
-                TextColumn::make('total_installments')
+                Tables\Columns\TextColumn::make('total_installments')
                     ->label('Total Installments')
                     ->sortable(),
-                TextColumn::make('installment_amount_per_month')
+                Tables\Columns\TextColumn::make('installment_amount_per_month')
                     ->label('Installment Amount/Month')
                     ->money('INR')
                     ->sortable(),
-                TextColumn::make('loan_status')
-                    ->label('Status')->badge()->sortable()
+                Tables\Columns\TextColumn::make('amount_paid')
+                    ->label('Amount Paid')
+                    ->money('INR')
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('loan_status')
+                    ->label('Status')
+                    ->badge()
+                    ->sortable()
                     ->colors([
-                        'pending' => 'warning',
-                        'approved' => 'success',
-                        'rejected' => 'danger',
-                        'paid' => 'gray',
+                        'Pending' => 'warning',
+                        'Approved' => 'success',
+                        'Rejected' => 'danger',
+                        'Completed' => 'gray',
                     ]),
-                TextColumn::make('disbursement_method')
+                Tables\Columns\TextColumn::make('disbursement_method')
                     ->label('Disbursement Method')
                     ->sortable(),
-                TextColumn::make('approver.name')
+                Tables\Columns\TextColumn::make('approver.name')
                     ->label('Approved By')
                     ->sortable(),
-                TextColumn::make('remark')
+                Tables\Columns\TextColumn::make('remark')
                     ->label('Remark')
                     ->limit(50),
-                TextColumn::make('created_at')
+                Tables\Columns\TextColumn::make('created_at')
                     ->label('Created At')
-                    ->datetime()
+                    ->dateTime()
                     ->sortable(),
-                TextColumn::make('updated_at')
+                Tables\Columns\TextColumn::make('updated_at')
                     ->label('Updated At')
-                    ->datetime()
+                    ->dateTime()
                     ->sortable(),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('loan_status')
+                    ->options([
+                        'Pending' => 'Pending',
+                        'Approved' => 'Approved',
+                        'Rejected' => 'Rejected',
+                        'Completed' => 'Completed',
+                    ]),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('approve')
+                    ->label('Approve')
+                    ->action(function (Loans $record) {
+                        $record->update([
+                            'loan_status' => 'Approved',
+                            'loan_approved_by' => auth()->id(),
+                            'updated_at' => now(),
+                        ]);
+                    })
+                    ->requiresConfirmation()
+                    ->visible(fn (Loans $record) => $record->loan_status === 'Pending'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -181,23 +227,42 @@ class LoansResource extends Resource
             ]);
     }
 
-    protected static function calculateTotalInstallments(Forms\Set $set, Forms\Get $get): void
+    protected static function calculateInstallmentDetails(Forms\Set $set, Forms\Get $get): void
     {
         $loanAmount = $get('loan_amount');
         $installmentAmountPerMonth = $get('installment_amount_per_month');
+        $totalInstallments = $get('total_installments');
+        $loanStartDate = $get('loan_start_date');
 
+        // Case 1: Calculate total_installments if loan_amount and installment_amount_per_month are set
         if (is_numeric($loanAmount) && is_numeric($installmentAmountPerMonth) && $installmentAmountPerMonth > 0) {
-            $totalInstallments = ceil($loanAmount / $installmentAmountPerMonth);
-            $set('total_installments', $totalInstallments);
-        } else {
-            $set('total_installments', null);
+            $calculatedInstallments = ceil($loanAmount / $installmentAmountPerMonth);
+            $set('total_installments', $calculatedInstallments);
+
+            // Calculate loan_end_date if loan_start_date is available
+            if ($loanStartDate) {
+                $endDate = Carbon::parse($loanStartDate)->addMonths($calculatedInstallments)->toDateString();
+                $set('loan_end_date', $endDate);
+            }
+        }
+
+        // Case 2: Calculate installment_amount_per_month if loan_amount and total_installments are set
+        elseif (is_numeric($loanAmount) && is_numeric($totalInstallments) && $totalInstallments > 0) {
+            $calculatedInstallment = round($loanAmount / $totalInstallments, 2);
+            $set('installment_amount_per_month', $calculatedInstallment);
+
+            // Calculate loan_end_date if loan_start_date is available
+            if ($loanStartDate) {
+                $endDate = Carbon::parse($loanStartDate)->addMonths($totalInstallments)->toDateString();
+                $set('loan_end_date', $endDate);
+            }
         }
     }
 
     public static function getRelations(): array
     {
         return [
-            //
+            // Add relations if needed (e.g., EmployeeRelationManager)
         ];
     }
 

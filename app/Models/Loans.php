@@ -34,4 +34,10 @@ class Loans extends Model
     public function approver() {
         return $this->belongsTo(User::class, 'loan_approved_by');
     }
+
+    public function repayments()
+    {
+        return $this->hasMany(LoanRepayment::class ,'loan_id');
+    }
+
 }
