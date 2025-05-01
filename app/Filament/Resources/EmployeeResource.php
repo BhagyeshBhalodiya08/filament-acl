@@ -57,10 +57,10 @@ class EmployeeResource extends BaseResource
                 ])->columns(2),
     
                 Forms\Components\Section::make('Financial Details')->schema([
-                    TextInput::make('salary_per_day')->numeric()->nullable(),
-                    TextInput::make('pf_amount')->numeric()->nullable(),
-                    TextInput::make('regular_expense')->numeric()->nullable(),
-                    TextInput::make('food_expense')->numeric()->nullable(),
+                    TextInput::make('salary_per_day')->numeric()->nullable()->prefix('₹'),
+                    TextInput::make('pf_amount')->numeric()->nullable()->prefix('₹'),
+                    TextInput::make('regular_expense')->numeric()->nullable()->prefix('₹'),
+                    TextInput::make('food_expense')->numeric()->nullable()->prefix('₹'),
                     TextInput::make('bank_account_number')->nullable(),
                 ])->columns(2),
     

@@ -12,6 +12,7 @@ class Attendance extends Model
         'shortfall_hours',
         'extra_hours',
         'compensated_hours',
+        'days_count',
         'attendance_date',
         'remark',
         'industry_id',

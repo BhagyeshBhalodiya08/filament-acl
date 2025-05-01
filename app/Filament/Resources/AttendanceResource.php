@@ -43,6 +43,9 @@ class AttendanceResource extends Resource
                         ->schema([
                             Select::make('employee_id')
                                 ->label('Employees')
+                                ->searchable()
+                                ->preload()
+                                ->default(2)
                                 ->relationship('employee', 'full_name')
                                 ->required(),
                             DateRangePicker::make('attendance_date')
@@ -58,7 +61,47 @@ class AttendanceResource extends Resource
                                         return "$currentDate - $currentDate";
                                     }
                                     return null;
+                                })->afterStateUpdated(function (callable $set, $state) {
+                                    // Check if state is empty or not a string
+                                        if (empty($state) || !is_string($state)) {
+                                            $set('days_count', null);
+                                            return;
+                                        }
+
+                                        try {
+                                            // Split the string into start and end dates
+                                            [$startDateString, $endDateString] = explode(' - ', $state);
+
+                                            // Parse dates using Carbon
+                                            $startDate = Carbon::createFromFormat('d/m/Y', trim($startDateString));
+                                            $endDate = Carbon::createFromFormat('d/m/Y', trim($endDateString));
+
+                                            // Validate parsed dates
+                                            if (!$startDate || !$endDate) {
+                                                $set('days_count', null);
+                                                return;
+                                            }
+
+                                            // Check if end date is before start date
+                                            if ($endDate->lt($startDate)) {
+                                                $set('days_count', null);
+                                                return;
+                                            }
+
+                                            // Calculate days (inclusive)
+                                            $daysCount = $startDate->diffInDays($endDate) + 1;
+                                            $set('days_count', $daysCount);
+                                        } catch (\Exception $e) {
+                                            // Handle parsing errors
+                                            $set('days_count', null);
+                                        }
                                 }),
+                                TextInput::make('days_count')
+                                ->label('Number of Days')
+                                ->numeric()
+                                ->disabled()
+                                ->dehydrated(true)
+                                ->helperText('Automatically calculated based on the selected date range.'),
                         ])->columnSpan(2),
                     Section::make('Attendance Information')->collapsible()
                         ->description('Specify the attendance type and working day details.')
@@ -131,7 +174,11 @@ class AttendanceResource extends Resource
                 ->label('Attendance End Date')
                 ->date()
                 ->sortable(),
-
+            Tables\Columns\TextColumn::make('days_count')
+                ->label('Days Count')
+                ->sortable()
+                ->alignCenter()
+                ->formatStateUsing(fn ($state) => $state ?? 'N/A'),
             Tables\Columns\TextColumn::make('attendance_type')
                 ->label('Attendance Type')->badge()
                 ->colors([
@@ -152,15 +199,18 @@ class AttendanceResource extends Resource
 
             Tables\Columns\TextColumn::make('shortfall_hours')
                 ->label('Shortfall Hours')
-                ->sortable(),
+                ->sortable()
+                ->formatStateUsing(fn ($state) => $state ? number_format($state, 2) : '0.00'),
 
             Tables\Columns\TextColumn::make('extra_hours')
                 ->label('Extra Hours')
-                ->sortable(),
+                ->sortable()
+                ->formatStateUsing(fn ($state) => $state ? number_format($state, 2) : '0.00'),
 
             Tables\Columns\TextColumn::make('remark')
                 ->label('Remark')
-                ->limit(50),
+                ->limit(50)
+                ->tooltip(fn ($state) => $state),
 
             Tables\Columns\TextColumn::make('industry.name')
                 ->label('Industry')
@@ -206,5 +256,25 @@ class AttendanceResource extends Resource
             'create' => Pages\CreateAttendance::route('/create'),
             'edit' => Pages\EditAttendance::route('/{record}/edit'),
         ];
+    }
+    public static function mutateFormDataBeforeCreate(array $data): array
+    {
+        if (isset($data['attendance_date'])) {
+            $data['attendances_start_date'] = Carbon::parse($data['attendance_date']['from'])->toDateString();
+            $data['attendances_end_date'] = Carbon::parse($data['attendance_date']['to'])->toDateString();
+            unset($data['attendance_date']);
+        }
+        return $data;
+    }
+
+    public static function mutateFormDataBeforeSave(array $data): array
+    {
+    \Log::info("Sds");
+        if (isset($data['attendance_date'])) {
+            $data['attendances_start_date'] = Carbon::parse($data['attendance_date']['from'])->toDateString();
+            $data['attendances_end_date'] = Carbon::parse($data['attendance_date']['to'])->toDateString();
+            unset($data['attendance_date']);
+        }
+        return $data;
     }
 }

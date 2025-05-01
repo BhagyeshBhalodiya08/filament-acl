@@ -16,7 +16,7 @@ class Salary extends Model
         'total_hours_worked', 'overtime_hours', 'half_day_count', 'basic_salary',
         'other_allowances', 'food_allowance', 'loan_installment', 'pf_amount',
         'advance_salary', 'gross_salary', 'due_loan', 'total_payable',
-        'payment_method', 'salary_status', 'remark', 'approved_by'
+        'payment_method', 'salary_status', 'remark', 'approved_by','employee_id'
     ];
 
     public function worker() {

@@ -20,18 +20,12 @@ class EditAttendance extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        if (isset($data['attendance_date'])) {
-            // Extract start and end dates
-            $dates = explode(' - ', $data['attendance_date']);
-
-            // Convert them to Carbon instances
-            $data['attendances_start_date'] = Carbon::createFromFormat('d/m/Y', trim($dates[0]))->startOfDay();
-            $data['attendances_end_date'] = Carbon::createFromFormat('d/m/Y', trim($dates[1]))->endOfDay();
-
-            // Remove the temporary field
+        if (isset($data['attendance_date']) && is_string($data['attendance_date'])) {
+            [$startDateString, $endDateString] = explode(' - ', $data['attendance_date']);
+            $data['attendances_start_date'] = Carbon::createFromFormat('d/m/Y', trim($startDateString))->toDateString();
+            $data['attendances_end_date'] = Carbon::createFromFormat('d/m/Y', trim($endDateString))->toDateString();
             unset($data['attendance_date']);
         }
-
         return $data;
     }
 }
