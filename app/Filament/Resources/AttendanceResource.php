@@ -38,7 +38,7 @@ class AttendanceResource extends Resource
             ->schema([
                 Grid::make(2) // Creates a grid with two equal-width columns
                 ->schema([
-                    Section::make('Employee Details')
+                    Section::make('Employee & Date')
                         ->description('Select the employee and specify the attendance date.')
                         ->schema([
                             Select::make('employee_id')
@@ -102,27 +102,20 @@ class AttendanceResource extends Resource
                                 ->disabled()
                                 ->dehydrated(true)
                                 ->helperText('Automatically calculated based on the selected date range.'),
-                        ])->columnSpan(2),
-                    Section::make('Attendance Information')->collapsible()
-                        ->description('Specify the attendance type and working day details.')
-                        ->schema([
-                            Select::make('attendance_type')
-                                ->options([
-                                    'Half Day' => 'Half Day',
-                                    'Full Day' => 'Full Day',
-                                    'Absent' => 'Absent',
-                                    'Custom Hours' => 'Custom Hours',
-                                ])
-                                ->required(),
-                            // Select::make('working_day_type')
-                            //     ->options([
-                            //         'Half Day' => 'Half Day',
-                            //         'Full Day' => 'Full Day',
-                            //     ])->default("Full Day"),
                         ])->columnSpan(1),
-                    Section::make('Hours Details')->collapsible()
+                    Section::make('Attendance Type & Hours Details')
                         ->description('Provide details about shortfall, extra, and compensated hours.')
                         ->schema([
+                            Select::make('attendance_type')
+                            ->options([
+                                'Half Day' => 'Half Day',
+                                'Full Day' => 'Full Day',
+                                'Absent' => 'Absent',
+                                'Custom Hours' => 'Custom Hours',
+                            ])
+                            ->searchable()
+                            ->preload()
+                            ->required(),
                             TextInput::make('shortfall_hours')
                                 ->numeric()
                                 ->step(0.01)
@@ -132,7 +125,7 @@ class AttendanceResource extends Resource
                                 ->step(0.01)
                                 ->nullable(),
                         ])->columnSpan(1),
-                    Section::make('Additional Information')->collapsible()
+                    Section::make('Additional Information')
                         ->description('Add remarks and specify the approver.')
                         ->schema([
                             Textarea::make('remark')
@@ -144,7 +137,8 @@ class AttendanceResource extends Resource
                             Select::make('approved_by')
                                 ->label('Approved By')
                                 ->relationship('approver', 'name')
-                                ->nullable()
+                                ->searchable()
+                                ->preload()
                                 ->required(),
                         ])->columnSpan(2)
                 ])->columns(2), // Occupies one column,

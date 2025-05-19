@@ -13,6 +13,7 @@ class Loans extends Model
         'loan_start_date',
         'loan_end_date',
         'total_installments',
+        'dynamic_loan_end_date',
         'installment_amount_per_month',
         'loan_status',
         'loan_purpose',

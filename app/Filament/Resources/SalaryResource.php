@@ -13,6 +13,7 @@ use Filament\Tables\Table;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Illuminate\Container\Attributes\Log;
+use Filament\Notifications\Notification;
 
 class SalaryResource extends Resource
 {
@@ -45,9 +46,6 @@ class SalaryResource extends Resource
                     ->money('INR'),
                 Tables\Columns\TextColumn::make('advance_salary')
                     ->label('Advance Salary')
-                    ->money('INR'),
-                Tables\Columns\TextColumn::make('total_due_loan')
-                    ->label('Due Loan')
                     ->money('INR'),
                 Tables\Columns\TextColumn::make('total_payable')
                     ->label('Total Payable')
@@ -84,8 +82,7 @@ class SalaryResource extends Resource
         return $form
             ->schema([
                 // 👤 Employee Selection & Month
-                Forms\Components\Section::make('Salary Information')
-                    ->description('Select employee and month to begin salary entry')
+                Forms\Components\Section::make('Employee Info')
                     ->columns(2)
                     ->schema([
                         Forms\Components\Select::make('employee_id')
@@ -94,6 +91,7 @@ class SalaryResource extends Resource
                             ->searchable()
                             ->preload()
                             ->required()
+                            ->default(2)
                             ->live()
                             ->afterStateHydrated(function (callable $get, callable $set) {
                                 $salaryMonth = $get('salary_month');
@@ -120,15 +118,16 @@ class SalaryResource extends Resource
                             ->displayFormat('F Y')
                             ->format('Y-m')
                             ->required()
+                            // ->default(now())
                             ->live()
-                            ->afterStateHydrated(function (callable $get, callable $set) {
-                                self::populateSalaryRate($get, $set); // Trigger on page load
-                            })
+                            // ->afterStateHydrated(function (callable $get, callable $set) {
+                            //     // self::populateSalaryRate($get, $set); // Trigger on page load
+                            // })
                             ->afterStateUpdated(function ($state, callable $set, callable $get) {
                                 try {
                                     self::calculateSalaryDetails($state, $get, $set);
                                 } catch (\Exception $e) {
-                                    $set('error_message', 'Error calculating salary: ' . $e->getMessage());
+                                    Notification::make()->title('Error')->body('Error calculating salary: ' . $e->getMessage())->send();
                                 }
                             }),
                     ]),
@@ -227,18 +226,8 @@ class SalaryResource extends Resource
                             ->nullable()
                             ->searchable()
                             ->preload(),
+                        Forms\Components\Textarea::make('remark')->columnSpanFull()
                     ]),
-
-                // 📝 Final Notes
-                Forms\Components\Section::make('Remarks')
-                    ->schema([
-                        Forms\Components\Textarea::make('remark')->columnSpanFull(),
-                    ]),
-
-                // 🚨 Error Feedback
-                Forms\Components\Placeholder::make('error_message')
-                    ->content(fn (callable $get) => $get('error_message'))
-                    ->hidden(fn (callable $get) => !$get('error_message')),
             ]);
     }
 
@@ -263,14 +252,14 @@ class SalaryResource extends Resource
         $industryId = $employee->industry_id;
 
         if (!$industryId) {
-            $set('error_message', 'Employee has no associated industry');
+            Notification::make()->title('Error')->body('Employee has no associated industry')->send();
             return;
         }
 
         try {
             $attendanceDetails = self::calculateAttendanceDetails($salaryMonth, $employeeId);
             if (!$attendanceDetails) {
-                $set('error_message', 'No attendance records found');
+                Notification::make()->title('Error')->body('No attendance records found')->send();
                 return;
             }
 
@@ -294,7 +283,7 @@ class SalaryResource extends Resource
             // Calculate initial salary details
             self::recalculateSalary($get, $set);
         } catch (\Exception $e) {
-            $set('error_message', 'Error calculating salary details: ' . $e->getMessage());
+            Notification::make()->title('Error')->body('Error calculating salary details: ' . $e->getMessage())->send();
         }
     }
 
@@ -359,7 +348,7 @@ class SalaryResource extends Resource
                 'advance_details' => $advanceDetails,
             ];
         } catch (\Exception $e) {
-            $set('error_message', 'Error calculating loans and advances: ' . $e->getMessage());
+            Notification::make()->title('Error')->body('Error calculating loans and advances: ' . $e->getMessage())->send();
             return [
                 'monthly_loan_installment' => 0,
                 'remaining_loan' => 0,
@@ -381,7 +370,7 @@ class SalaryResource extends Resource
             if (!$employeeId) {
                 return;
             }
-
+            
             $totalHoursWorked = max(0, (float)($get('total_hours_worked') ?? 0));
             $salaryPerDay = max(0, (float)($get('salary_per_day') ?? 0));
             $daysPresent = max(0, (float)($get('days_present') ?? 0));
@@ -421,11 +410,11 @@ class SalaryResource extends Resource
             $set('basic_salary', $basicSalary);
             $set('other_allowances', $otherAllowances);
             $set('food_allowance', $foodAllowance);
-
+            Notification::make()->title('Error')->body('Error calculating loans and advances: '.$basicSalary )->send();
             // Update gross salary and payable amounts
             self::updateGrossAndPayable($get, $set);
         } catch (\Exception $e) {
-            $set('error_message', 'Calculation error: ' . $e->getMessage());
+            Notification::make()->title('Error')->body('Calculation error: ' . $e->getMessage())->send();
         }
     }
 
@@ -488,7 +477,7 @@ class SalaryResource extends Resource
             $set('gross_salary', $gross);
             $set('total_payable', $payable);
         } catch (\Exception $e) {
-            $set('error_message', 'Error updating totals: ' . $e->getMessage());
+            Notification::make()->title('Error')->body('Error updating totals: ' . $e->getMessage())->send();
         }
     }
 
@@ -601,72 +590,78 @@ class SalaryResource extends Resource
             // Get all attendance records for the employee in the given month
             $attendances = DB::table('attendances')
                 ->where('employee_id', $employeeId)
-                ->where(function($query) use ($startDate, $endDate) {
-                    // Records that overlap with the month
-                    $query->where(function($q) use ($startDate, $endDate) {
+                ->where(function ($query) use ($startDate, $endDate) {
+                    // Records that overlap with the date range
+                    $query->where(function ($q) use ($startDate, $endDate) {
                         $q->where('attendances_start_date', '<=', $endDate)
-                          ->where('attendances_end_date', '>=', $startDate);
+                        ->where('attendances_end_date', '>=', $startDate);
                     });
                 })
                 ->get();
             
-            $daysPresent = 0;
-            $daysAbsent = 0;
-            $totalHoursWorked = 0;
-            $overtimeHours = 0;
             
-            // Process each attendance record
-            foreach ($attendances as $attendance) {
-                // Calculate the actual days in the period that fall within this month
-                $recordStart = max(Carbon::parse($attendance->attendances_start_date), Carbon::parse($startDate));
-                $recordEnd = min(Carbon::parse($attendance->attendances_end_date), Carbon::parse($endDate));
-                
-                // Calculate days in this attendance record (+1 because diff doesn't include end date)
-                $periodDays = $recordStart->diffInDays($recordEnd) + 1;
-                
-                // Calculate presence based on attendance type
-                if ($attendance->attendance_type == 'Full Day') {
-                    $daysPresent += $periodDays;
-                    $totalHoursWorked += $periodDays * 8; // Standard workday
-                } elseif ($attendance->attendance_type == 'Half Day') {
-                    $daysPresent += $periodDays * 0.5;
-                    $totalHoursWorked += $periodDays * 4; // Half day
-                } elseif ($attendance->attendance_type == 'Custom Hours') {
-                    $daysPresent += $periodDays;
-                    $hoursPerDay = $attendance->worked_hours ?? 8;
-                    $totalHoursWorked += $periodDays * $hoursPerDay;
-                } elseif ($attendance->attendance_type == 'Absent') {
-                    $daysAbsent += $periodDays;
+                $daysPresent = 0;
+                $daysAbsent = 0;
+                $totalHoursWorked = 0;
+                $overtimeHours = 0;
+
+                // Process each attendance record
+                foreach ($attendances as $attendance) {
+                    $recordStart = max(Carbon::parse($attendance->attendances_start_date), Carbon::parse($startDate));
+                    $recordEnd = min(Carbon::parse($attendance->attendances_end_date), Carbon::parse($endDate));
+
+                    // Calculate number of days for this attendance record (+1 to include end date)
+                    $periodDays = $attendance->days_count ?? $recordStart->diffInDays($recordEnd) + 1;
+
+                    // Type-based processing
+                    if ($attendance->attendance_type === 'Full Day') {
+                        $daysPresent += $periodDays;
+                        $totalHoursWorked += $periodDays * 8; // Standard full-day hours
+                    } elseif ($attendance->attendance_type === 'Half Day') {
+                        $daysPresent += $periodDays * 0.5;
+                        $totalHoursWorked += $periodDays * 4; // Half-day hours
+                    } elseif ($attendance->attendance_type === 'Custom Hours') {
+                        $daysPresent += $periodDays;
+                        $hoursPerDay = (float) ($attendance->worked_hours ?? 8);
+                        $totalHoursWorked += $periodDays * $hoursPerDay;
+                    } elseif ($attendance->attendance_type === 'Absent') {
+                        $daysAbsent += $periodDays;
+                    }
+
+                    // Handle overtime
+                    $extraHours = (float) ($attendance->extra_hours ?? 0);
+                    if ($extraHours > 0) {
+                        $overtimeHours += $extraHours;
+                    }
+
+                    // Adjust for shortfall
+                    $shortfall = (float) ($attendance->shortfall_hours ?? 0);
+                    if ($shortfall > 0) {
+                        if ($attendance->attendance_type === 'Custom Hours') {
+                            $totalHoursWorked = max(0, $totalHoursWorked - $shortfall);
+                        } else {
+                            $totalHoursWorked = max(0, $totalHoursWorked - ($periodDays * $shortfall));
+                        }
+                    }
                 }
-                
-                // Process overtime
-                if ($attendance->extra_hours) {
-                    $overtimeHours += $attendance->extra_hours;
+
+                // Final rounding for cleaner display
+                $daysPresent = round($daysPresent, 1);
+                $totalHoursWorked = round($totalHoursWorked, 1);
+                $overtimeHours = round($overtimeHours, 1);
+
+                // Calculate absent days if not fully covered by attendance
+                if ($daysPresent + $daysAbsent < $workingDays) {
+                    $daysAbsent = $workingDays - $daysPresent;
                 }
-                
-                // Adjust for shortfall hours
-                if ($attendance->shortfall_hours) {
-                    $totalHoursWorked = max(0, $totalHoursWorked - $attendance->shortfall_hours);
-                }
-            }
-            
-            // Round values for cleaner display
-            $daysPresent = round($daysPresent, 1);
-            $totalHoursWorked = round($totalHoursWorked, 1);
-            $overtimeHours = round($overtimeHours, 1);
-            
-            // Calculate days absent from working days if not already calculated
-            if ($daysPresent + $daysAbsent < $workingDays) {
-                $daysAbsent = $workingDays - $daysPresent;
-            }
-            
-            return [
-                'workingDays' => $workingDays,
-                'daysPresent' => $daysPresent,
-                'daysAbsent' => $daysAbsent,
-                'totalHoursWorked' => $totalHoursWorked,
-                'overtimeHours' => $overtimeHours,
-            ];
+
+                return [
+                    'workingDays' => $workingDays,
+                    'daysPresent' => $daysPresent,
+                    'daysAbsent' => $daysAbsent,
+                    'totalHoursWorked' => $totalHoursWorked,
+                    'overtimeHours' => $overtimeHours,
+                ];
         } catch (\Exception $e) {
             // Return default values in case of error
             return [

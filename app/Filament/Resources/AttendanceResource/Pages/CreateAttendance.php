@@ -21,4 +21,15 @@ class CreateAttendance extends CreateRecord
         }
         return $data;
     }
+    
+    // protected function getHeaderActions(): array
+    // {
+    //     return [
+    //         \Filament\Actions\Action::make('createAnother')
+    //         ->label(__('filament-panels::resources/pages/create-record.form.actions.create_another.label'))
+    //         ->action('createAnother')
+    //         ->keyBindings(['mod+shift+s'])
+    //         ->color('gray')
+    //     ];
+    // }
 }
